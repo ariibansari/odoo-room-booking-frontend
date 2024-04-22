@@ -1,16 +1,27 @@
 import ProtectedAxios from '@/api/protectedAxios'
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { toast } from './ui/use-toast'
 import { LoaderCircle } from 'lucide-react'
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from '@/components/ui/button'
-import { format } from 'date-fns'
-import { Room } from '@/utils/types'
+import { format, isSameDay } from 'date-fns'
+import { BookingDetail, Room } from '@/utils/types'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { SessionContext } from '@/context/SessionProvider'
+import { SocketContext } from '@/context/SocketProvider'
 
 
 const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => {
+    const { session } = useContext(SessionContext)
+    const { socket } = useContext(SocketContext)
+
     const [loadingRoomDetails, setLoadingRoomDetails] = useState(true)
-    const [roomDetails, setRoomDetails] = useState()
+    const [roomDetails, setRoomDetails] = useState<Room>()
 
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
 
@@ -35,6 +46,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
     const [selectedTimeRange, setSelectedTimeRange] = useState("")
 
     const [bookingRoom, setBookingRoom] = useState(false)
+    const [unbookingRoom, setUnbookingRoom] = useState(false)
 
     useEffect(() => {
         if (sheetState) {
@@ -42,8 +54,10 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
         }
     }, [sheetState])
 
-    const getRoomDetails = () => {
-        setLoadingRoomDetails(true)
+    const getRoomDetails = (showLoading = true) => {
+        if (showLoading) {
+            setLoadingRoomDetails(true)
+        }
         ProtectedAxios.get(`/api/user/roomDetails/${room.room_id}`)
             .then(res => {
                 setRoomDetails(res.data)
@@ -74,10 +88,11 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                 .then(res => {
                     setBookingRoom(false)
                     toast({
+                        variant: "success",
                         title: `Booking confirmed | ${room.room_name}`,
                         description: `on ${format(selectedDate, "dd/MM/yyyy")} from ${selectedTimeRange}`
                     })
-                    getRoomDetails()
+                    getRoomDetails(false)
                 })
                 .catch(err => {
                     console.log(err);
@@ -90,6 +105,62 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                 })
         }
     }
+
+
+    const unbookRoom = () => {
+        if (selectedDate && selectedTimeRange && roomDetails?.BookingDetail) {
+
+            let booking = roomDetails.BookingDetail.filter(booking => isSameDay(booking.booking_date, selectedDate) && booking.booking_time_slot === selectedTimeRange)
+
+            if (booking.length > 0 && booking[0].booking_detail_id) {
+                let booking_detail_id = booking[0].booking_detail_id
+                setUnbookingRoom(true)
+                ProtectedAxios.post("/api/user/room/unbook", { session_id: session?.session_id, booking_detail_id })
+                    .then(res => {
+                        setRoomDetails(prev => {
+                            if (prev?.BookingDetail) {
+                                prev.BookingDetail = prev?.BookingDetail?.filter(booking => booking.booking_detail_id !== booking_detail_id)
+                            }
+                            return prev
+                        })
+
+                        toast({
+                            title: `Unbooked | ${room.room_name}`,
+                            description: `on ${format(selectedDate, "dd/MM/yyyy")} from ${selectedTimeRange}`
+                        })
+
+                        setUnbookingRoom(false)
+                    })
+                    .catch(err => {
+                        console.log(err);
+                        toast({
+                            variant: "destructive",
+                            title: "Could not unbook your booking at the moment, please try again!"
+                        })
+                        setUnbookingRoom(false)
+                    })
+            }
+        }
+    }
+
+
+    useEffect(() => {
+        if (socket) {
+            socket.on("room_booked", (data: BookingDetail) => {
+                if (data.session_id !== session?.session_id) {
+                    // only for other users and not the one who booked
+                    getRoomDetails(false)
+                }
+            })
+
+            socket.on("room_unbooked", (data: { deleted_booking_detail_id: number, session_id: number }) => {
+                if (data.session_id !== session?.session_id) {
+                    // only for other users and not the one who unbooked
+                    getRoomDetails(false)
+                }
+            })
+        }
+    }, [])
 
     return (
         <div>
@@ -116,14 +187,43 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
 
                             <div className='flex justify-start flex-wrap gap-6'>
                                 {timeSlots.map((slot, i) => (
-                                    <button
-                                        key={i}
-                                        className={`text-sm border outline outline-transparent px-2 py-3 rounded-md transition-all disabled:opacity-60 ${selectedTimeRange === slot.time_range ? "border border-primary outline-1 outline-primary" : ""}`}
-                                        onClick={() => handleTimeSlotClick(slot.time_range)}
-                                        disabled={bookingRoom}
-                                    >
-                                        {slot.time_range}
-                                    </button>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger>
+                                                <button
+                                                    key={i}
+                                                    className={`
+                                                    text-sm border outline outline-transparent px-2 py-3 rounded-md transition-all disabled:opacity-70 
+                                                    ${selectedTimeRange === slot.time_range ? "border border-primary outline-1 outline-primary" : ""}
+                                                    ${selectedDate && roomDetails?.BookingDetail?.some(booking => booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate))
+                                                            ? roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate)) >= 0
+                                                                ? "bg-green-200"
+                                                                : "bg-destructive/70"
+                                                            : ""
+                                                        }
+                                                    `}
+                                                    onClick={() => handleTimeSlotClick(slot.time_range)}
+                                                    disabled={
+                                                        bookingRoom ||
+                                                        (selectedDate && roomDetails?.BookingDetail?.some(booking => booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate)) && !(roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate)) >= 0))
+                                                    }
+                                                >
+                                                    {slot.time_range}
+                                                </button>
+                                            </TooltipTrigger>
+
+                                            <TooltipContent>
+                                                <p>
+                                                    {selectedDate && roomDetails?.BookingDetail?.some(booking => booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate))
+                                                        ? roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === slot.time_range && isSameDay(booking.booking_date, selectedDate)) >= 0
+                                                            ? "Your booking, click to unbook"
+                                                            : "Already booked!"
+                                                        : "Select time slot"
+                                                    }
+                                                </p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 ))}
                             </div>
                         </div>
@@ -131,18 +231,35 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                         <hr className='my-8' />
 
                         <div className='pt-5 flex items-end flex-col'>
-                            <Button
-                                size="lg"
-                                disabled={!selectedDate || !selectedTimeRange || bookingRoom}
-                                className='gap-2'
-                                onClick={confirmBooking}
-                            >
-                                Book Room
-                                {bookingRoom
-                                    &&
-                                    <LoaderCircle className='animate-spin' size={20} />
-                                }
-                            </Button>
+                            {selectedDate && selectedTimeRange && roomDetails?.BookingDetail && roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === selectedTimeRange && isSameDay(booking.booking_date, selectedDate)) >= 0
+                                ?
+                                < Button
+                                    size="lg"
+                                    disabled={!selectedDate || !selectedTimeRange || unbookingRoom}
+                                    className='gap-2'
+                                    onClick={unbookRoom}
+                                >
+                                    Unbook
+                                    {unbookingRoom
+                                        &&
+                                        <LoaderCircle className='animate-spin' size={20} />
+                                    }
+                                </Button>
+
+                                :
+                                < Button
+                                    size="lg"
+                                    disabled={!selectedDate || !selectedTimeRange || bookingRoom}
+                                    className='gap-2'
+                                    onClick={confirmBooking}
+                                >
+                                    Book Room
+                                    {bookingRoom
+                                        &&
+                                        <LoaderCircle className='animate-spin' size={20} />
+                                    }
+                                </Button>
+                            }
 
                             {!selectedDate
                                 ? <p className='text-destructive text-sm mt-2 px-1'>* pick a day to continue</p>
@@ -158,7 +275,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                         </div>
                     </section>
             }
-        </div>
+        </div >
     )
 }
 

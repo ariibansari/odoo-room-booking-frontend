@@ -1,6 +1,9 @@
 import ProtectedAxios from '@/api/protectedAxios'
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SocketContext } from '@/context/SocketProvider'
+import { BookingDetail } from '@/utils/types'
+import { SessionContext } from '@/context/SessionProvider'
 
 
 type Availability = {
@@ -9,6 +12,8 @@ type Availability = {
 }
 
 const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
+    const { socket } = useContext(SocketContext)
+    const { session } = useContext(SessionContext)
     const [loadingAvalability, setLoadingAvailability] = useState(true)
     const [avalability, setAvailability] = useState<Availability>({ status: "", color: "" })
 
@@ -16,8 +21,11 @@ const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
         getAvailabilityStatus()
     }, [])
 
-    const getAvailabilityStatus = () => {
-        setLoadingAvailability(true)
+    const getAvailabilityStatus = (showLoader = true) => {
+        if (showLoader) {
+            setLoadingAvailability(true)
+        }
+
         ProtectedAxios.get(`/api/user/room/${room_id}/availability`)
             .then(res => {
                 setAvailability(res.data)
@@ -28,7 +36,25 @@ const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
                 setLoadingAvailability(false)
             })
     }
-    
+
+    useEffect(() => {
+        if (socket) {
+            socket.on("room_booked", (data: BookingDetail) => {
+                if (data.session_id !== session?.session_id) {
+                    // only for other users and not the one who booked
+                    getAvailabilityStatus(true)
+                }
+            })
+
+            socket.on("room_unbooked", (data: { deleted_booking_detail_id: number, session_id: number }) => {
+                if (data.session_id !== session?.session_id) {
+                    // only for other users and not the one who unbooked
+                    getAvailabilityStatus(true)
+                }
+            })
+        }
+    }, [])
+
     return (
         <div className=''>
             {

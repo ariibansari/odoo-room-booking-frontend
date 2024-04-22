@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
-import './App.css'
-import Logo from './components/ui/logo'
+import { useContext, useEffect, useState } from 'react'
+import '@/App.css'
+import Logo from '@/components/ui/logo'
 import { LoaderCircle } from 'lucide-react'
 import Axios from '@/api/axios'
 import Rooms from '@/components/Rooms'
 import { Toaster } from '@/components/ui/toaster'
 import { decrypt, encrypt } from '@/utils/cryptography'
+import io from 'socket.io-client';
+import { SessionContext } from '@/context/SessionProvider'
+import { SocketContext } from '@/context/SocketProvider'
 
 
 
@@ -13,6 +16,8 @@ function App() {
   const [authenticating, setAuthenticating] = useState(true)
   const [authenticated, setAuthenticated] = useState(false)
 
+  const { session, setSession } = useContext(SessionContext)
+  const { socket, setSocket } = useContext(SocketContext)
 
   useEffect(() => {
     authenticateSession()
@@ -30,11 +35,9 @@ function App() {
     if (session) {
       //get the encrypted session details
       const encryptedData = localStorage.getItem('odoo-room-booking-session')
-      console.log(encryptedData);
 
       //decrypt the session details
       const decryptedData = decrypt(encryptedData)
-      console.log(decryptedData);
 
       // check if decryptedData is valid
       if (JSON.parse(decryptedData)?.session_id) {
@@ -43,6 +46,7 @@ function App() {
     }
 
     if (session_id) {  // authenticated user
+      setSession({ session_id: session_id })
       setAuthenticating(false)
 
     } else { // get a new session for the user
@@ -50,6 +54,7 @@ function App() {
         .then(res => {
           if (res.data.sessionId) {
             localStorage.setItem("odoo-room-booking-session", encrypt(JSON.stringify({ session_id: res.data.sessionId })))
+            setSession({ session_id: res.data.sessionId })
             setAuthenticating(false)
             setAuthenticated(true)
           }
@@ -59,8 +64,24 @@ function App() {
           setAuthenticating(false)
         })
     }
-
   }
+
+
+  useEffect(() => {
+    if (session?.session_id) {
+      
+      let _socket = io(import.meta.env.VITE_API_BASE_URL, {
+        transports: ["polling"],
+        query: {
+          id: session.session_id
+        }
+      });
+
+      setSocket(_socket)
+    }
+  }, [session])
+
+
 
   return (
     <>
