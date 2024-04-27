@@ -18,7 +18,7 @@ const Room = ({ room, key }: { room: RoomType, key?: number }) => {
     return (
         <Sheet open={sheetState} onOpenChange={setSheetState}>
             <SheetTrigger>
-                <div key={key} className='rounded-md px-5 py-9 w-full bg-gray-200/60 transition-all hover:bg-gray-200/80 border border-transparent hover:border-gray-200'>
+                <div key={key} className='rounded-md px-5 py-9 w-full h-full bg-gray-200/60 transition-all hover:bg-gray-200/80 border border-transparent hover:border-gray-200'>
                     <div className='flex justify-between items-center gap-5'>
                         <h4 className='text-left font-medium text-lg'>{room.room_name}</h4>
                         <AvailabilityStatus room_id={room.room_id} />

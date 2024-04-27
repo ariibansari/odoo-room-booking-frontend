@@ -65,7 +65,7 @@ const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
                     !avalability.status
                         ? "-"
                         :
-                        <p className={`text-left`} style={{ color: avalability.color }}>{avalability.status}</p>
+                        <p className={`text-right`} style={{ color: avalability.color }}>{avalability.status}</p>
             }
         </div>
     )

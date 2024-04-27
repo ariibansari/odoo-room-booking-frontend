@@ -4,7 +4,7 @@ import { toast } from './ui/use-toast'
 import { LoaderCircle } from 'lucide-react'
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from '@/components/ui/button'
-import { format, getDate, isSameDay } from 'date-fns'
+import { format, formatDate, isAfter, isSameDay } from 'date-fns'
 import { BookingDetail, Room } from '@/utils/types'
 import {
     Tooltip,
@@ -25,7 +25,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
 
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
 
-    const [timeSlots, setTimeSlots] = useState([
+    const timeSlots = [
         { display_time_range: "10:00 - 10:30", time_range: "10:00 - 10:30" },
         { display_time_range: "10:30 - 11:00", time_range: "10:30 - 11:00" },
         { display_time_range: "11:00 - 11:30", time_range: "11:00 - 11:30" },
@@ -42,7 +42,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
         { display_time_range: "05:30 - 06:00", time_range: "17:30 - 18:00" },
         { display_time_range: "06:00 - 06:30", time_range: "18:00 - 18:30" },
         { display_time_range: "06:30 - 07:00", time_range: "18:30 - 19:00" },
-    ])
+    ]
     const [selectedTimeRange, setSelectedTimeRange] = useState("")
 
     const [bookingRoom, setBookingRoom] = useState(false)
@@ -53,6 +53,10 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
             getRoomDetails()
         }
     }, [sheetState])
+
+    useEffect(() => {
+        setSelectedTimeRange("")
+    }, [selectedDate])
 
     const getRoomDetails = (showLoading = true) => {
         if (showLoading) {
@@ -85,7 +89,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
         if (selectedDate && selectedTimeRange) {
             setBookingRoom(true)
             ProtectedAxios.post("/api/user/room/book", { room_id: room.room_id, selectedDate, selectedTimeRange })
-                .then(res => {
+                .then(() => {
                     setBookingRoom(false)
                     toast({
                         variant: "success",
@@ -116,7 +120,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                 let booking_detail_id = booking[0].booking_detail_id
                 setUnbookingRoom(true)
                 ProtectedAxios.post("/api/user/room/unbook", { session_id: session?.session_id, booking_detail_id })
-                    .then(res => {
+                    .then(() => {
                         setRoomDetails(prev => {
                             if (prev?.BookingDetail) {
                                 prev.BookingDetail = prev?.BookingDetail?.filter(booking => booking.booking_detail_id !== booking_detail_id)
@@ -162,6 +166,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
         }
     }, [])
 
+
     return (
         <div>
             {
@@ -175,16 +180,12 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                     <section className=''>
                         <h3 className='mt-10 text-lg font-medium'>Select Booking Details</h3>
                         <hr className='my-5' />
-                        {/* {roomDetails?.BookingDetail && roomDetails.BookingDetail[11].booking_date} - 
-                        {roomDetails?.BookingDetail && format(roomDetails.BookingDetail[11].booking_date, "yyyy/MM/dd")} - {selectedDate && format(selectedDate, "yyyy/MM/dd")}
-                        <br />
-                        {selectedDate && roomDetails?.BookingDetail && isSameDay(roomDetails.BookingDetail[11].booking_date, selectedDate) ? "yes" : "no"} */}
                         <div className='flex gap-7 items-end flex-wrap md:flex-nowrap'>
                             <Calendar
                                 mode="single"
                                 selected={selectedDate}
                                 onSelect={setSelectedDate}
-                                // fromDate={new Date()}
+                                fromDate={new Date()}
                                 className=""
                                 disabled={bookingRoom}
                             />
@@ -209,6 +210,7 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
                                                     onClick={() => handleTimeSlotClick(slot.time_range)}
                                                     disabled={
                                                         bookingRoom ||
+                                                        (selectedDate ? isSameDay(selectedDate, new Date()) ? isAfter(new Date(), new Date().setHours(parseInt(slot.time_range.split(" - ")[0].split(":")[0]), parseInt(slot.time_range.split(" - ")[0].split(":")[1]) + 30, 0, 0)) : false : true) || // if today's date is selcted then it checks whether today's time and time-slot to disable booking for time-slots that have passed
                                                         (selectedDate && roomDetails?.BookingDetail?.some(booking => booking.booking_time_slot === slot.time_range && isSameDay(format(booking.booking_date, "yyyy/MM/dd"), format(selectedDate, "yyyy/MM/dd"))) && !(roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === slot.time_range && isSameDay(format(booking.booking_date, "yyyy/MM/dd"), format(selectedDate, "yyyy/MM/dd"))) >= 0))
                                                     }
                                                 >
@@ -218,11 +220,33 @@ const BookRoom = ({ room, sheetState }: { room: Room, sheetState: boolean }) => 
 
                                             <TooltipContent>
                                                 <p>
-                                                    {selectedDate && roomDetails?.BookingDetail?.some(booking => booking.booking_time_slot === slot.time_range && isSameDay(format(booking.booking_date, "yyyy/MM/dd"), format(selectedDate, "yyyy/MM/dd")))
-                                                        ? roomDetails.BookingDetail.findIndex(booking => booking.session_id === session?.session_id && booking.booking_time_slot === slot.time_range && isSameDay(format(booking.booking_date, "yyyy/MM/dd"), format(selectedDate, "yyyy/MM/dd"))) >= 0
-                                                            ? "Your booking, click to unbook"
-                                                            : "Already booked!"
-                                                        : "Select time slot"
+
+                                                    {
+                                                        (
+                                                            // if today's date is selcted then it checks whether today's time and time-slot to disable booking for time-slots that have passed
+                                                            selectedDate ? isSameDay(selectedDate, new Date()) ? isAfter(new Date(), new Date().setHours(parseInt(slot.time_range.split(" - ")[0].split(":")[0]), parseInt(slot.time_range.split(" - ")[0].split(":")[1]) + 30, 0, 0)) : false : true)
+                                                            ? "Time passed! booking disabled"
+                                                            : selectedDate !== undefined &&
+                                                                roomDetails?.BookingDetail?.some(
+                                                                    booking =>
+                                                                        booking.booking_time_slot === slot.time_range &&
+                                                                        isSameDay(
+                                                                            format(booking.booking_date, "yyyy/MM/dd"),
+                                                                            format(selectedDate, "yyyy/MM/dd")
+                                                                        )
+                                                                )
+                                                                ? roomDetails.BookingDetail.findIndex(
+                                                                    booking =>
+                                                                        booking.session_id === session?.session_id &&
+                                                                        booking.booking_time_slot === slot.time_range &&
+                                                                        isSameDay(
+                                                                            format(booking.booking_date, "yyyy/MM/dd"),
+                                                                            format(selectedDate, "yyyy/MM/dd")
+                                                                        )
+                                                                ) >= 0
+                                                                    ? "Your booking, click to unbook"
+                                                                    : "Already booked!"
+                                                                : "Select time slot"
                                                     }
                                                 </p>
                                             </TooltipContent>
