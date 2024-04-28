@@ -18,5 +18,6 @@ export type Room = {
     room_description: string,
     room_capacity: number,
     Tags: TagRef[],
-    BookingDetail?: BookingDetail[]
+    BookingDetail?: BookingDetail[],
+    availabilityScore: number
 }

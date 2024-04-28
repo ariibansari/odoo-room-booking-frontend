@@ -5,7 +5,6 @@ import { LoaderCircle } from 'lucide-react'
 import Axios from '@/api/axios'
 import Rooms from '@/components/Rooms'
 import { Toaster } from '@/components/ui/toaster'
-import { decrypt, encrypt } from '@/utils/cryptography'
 import io from 'socket.io-client';
 import { SessionContext } from '@/context/SessionProvider'
 import { SocketContext } from '@/context/SocketProvider'
@@ -17,7 +16,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false)
 
   const { session, setSession } = useContext(SessionContext)
-  const { socket, setSocket } = useContext(SocketContext)
+  const { setSocket } = useContext(SocketContext)
 
   useEffect(() => {
     authenticateSession()
@@ -29,31 +28,13 @@ function App() {
     setAuthenticating(true)
     setAuthenticated(true)
 
-    let session_id
-    const session = localStorage.getItem("odoo-room-booking-session")
-
-    if (session) {
-      //get the encrypted session details
-      const encryptedData = localStorage.getItem('odoo-room-booking-session')
-
-      //decrypt the session details
-      const decryptedData = decrypt(encryptedData)
-
-      // check if decryptedData is valid
-      if (JSON.parse(decryptedData)?.session_id) {
-        session_id = JSON.parse(decryptedData).session_id
-      }
-    }
-
-    if (session_id) {  // authenticated user
-      setSession({ session_id: session_id })
+    if (session?.session_id) {  // authenticated user
       setAuthenticating(false)
 
     } else { // get a new session for the user
       Axios.get("/api/auth/session/new")
         .then(res => {
           if (res.data.sessionId) {
-            localStorage.setItem("odoo-room-booking-session", encrypt(JSON.stringify({ session_id: res.data.sessionId })))
             setSession({ session_id: res.data.sessionId })
             setAuthenticating(false)
             setAuthenticated(true)

@@ -13,7 +13,6 @@ type Availability = {
 
 const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
     const { socket } = useContext(SocketContext)
-    const { session } = useContext(SessionContext)
     const [loadingAvalability, setLoadingAvailability] = useState(true)
     const [avalability, setAvailability] = useState<Availability>({ status: "", color: "" })
 
@@ -39,18 +38,12 @@ const AvailabilityStatus = ({ room_id }: { room_id: number }) => {
 
     useEffect(() => {
         if (socket) {
-            socket.on("room_booked", (data: BookingDetail) => {
+            socket.on("room_booked", () => {
                 getAvailabilityStatus(false)
-                // if (data.session_id !== session?.session_id) {
-                //     // only for other users and not the one who booked
-                // }
             })
 
-            socket.on("room_unbooked", (data: { deleted_booking_detail_id: number, session_id: number }) => {
+            socket.on("room_unbooked", () => {
                 getAvailabilityStatus(false)
-                // if (data.session_id !== session?.session_id) {
-                //     // only for other users and not the one who unbooked
-                // }
             })
         }
     }, [])

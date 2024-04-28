@@ -23,16 +23,40 @@ import {
 
 const Rooms = () => {
     const [searchText, setSearchText] = useState("")
-
+    const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for debounce
     const [loadingRooms, setLoadingRooms] = useState(true)
     const [rooms, setRooms] = useState<RoomType[]>([])
 
+
+    const [tagsPopoverState, setTagsPopoverState] = useState(false)
+    const [loadingTags, setLoadingTags] = useState(false)
+    const [tagSearchText, setTagSearchText] = useState("")
+    const [tagSearchTypingTimeout, setTagSearchTypingTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for debounce
+    const [tags, setTags] = useState<Tag[]>([])
+    const [backupTags, setBackupTags] = useState<Tag[]>([])
+
+    const [selectedTags, setSelectedTags] = useState<Tag[]>([])
+    const [sortBy, setSortBy] = useState("none")
+
+
+    
     useEffect(() => {
-        getRooms(searchText, selectedTags)
+        getRooms(searchText, selectedTags, sortBy)
     }, [])
 
-    const getRooms = (text: string, tags: Tag[], sortBy = "none") => {
-        setLoadingRooms(true)
+    useEffect(() => {
+        if (tagsPopoverState) {
+            getTags()
+        }
+    }, [tagsPopoverState])
+
+
+
+    const getRooms = (text: string, tags: Tag[], sortBy = "none", showLoadingState = true) => {
+        if (showLoadingState) {
+            setLoadingRooms(true)
+        }
+
         ProtectedAxios.post("/api/user/room/all", { searchedText: text, selectedTags: tags, sortBy })
             .then(res => {
                 setRooms(res.data)
@@ -48,7 +72,6 @@ const Rooms = () => {
     }
 
 
-    const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for debounce
     const handleSearchTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newSearchText = e.target.value;
         setSearchText(newSearchText);
@@ -58,27 +81,10 @@ const Rooms = () => {
         }
 
         setTypingTimeout(setTimeout(() => {
-            getRooms(newSearchText, selectedTags);
+            getRooms(newSearchText, selectedTags, sortBy);
         }, 500));
     };
 
-
-    const [tagsPopoverState, setTagsPopoverState] = useState(false)
-    const [loadingTags, setLoadingTags] = useState(false)
-    const [tags, setTags] = useState<Tag[]>([])
-    const [backupTags, setBackupTags] = useState<Tag[]>([])
-    const [selectedTags, setSelectedTags] = useState<Tag[]>([])
-    const [tagSearchTypingTimeout, setTagSearchTypingTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for debounce
-    const [tagSearchText, setTagSearchText] = useState("")
-
-    useEffect(() => {
-    }, [selectedTags])
-
-    useEffect(() => {
-        if (tagsPopoverState) {
-            getTags()
-        }
-    }, [tagsPopoverState])
 
     const getTags = () => {
         setLoadingTags(true)
@@ -97,6 +103,7 @@ const Rooms = () => {
             })
     }
 
+
     const handleTagSearchTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newSearchText = e.target.value;
         setTagSearchText(newSearchText);
@@ -110,6 +117,7 @@ const Rooms = () => {
         }, 500));
     };
 
+
     const filterTags = (text: string) => {
         setTags(() => {
             return backupTags?.filter(tag => tag.tag_name.toLowerCase().includes(text.toLowerCase()))
@@ -122,7 +130,7 @@ const Rooms = () => {
         updatedTags.push(_tag)
 
         setSelectedTags(updatedTags)
-        getRooms(searchText, updatedTags)
+        getRooms(searchText, updatedTags, sortBy)
         setTagsPopoverState(false)
     }
 
@@ -130,16 +138,15 @@ const Rooms = () => {
     const removeSelectedTag = (_tag: Tag) => {
         let updatedTags = selectedTags.filter(tag => tag.tag_id !== _tag.tag_id)
         setSelectedTags(updatedTags)
-        getRooms(searchText, updatedTags)
+        getRooms(searchText, updatedTags, sortBy)
     }
 
 
-
-    const [sortBy, setSortBy] = useState("none")
     const handleSortByChange = (_sortBy: string) => {
         setSortBy(_sortBy)
         getRooms(searchText, selectedTags, _sortBy)
     }
+
 
     return (
         <section id="rooms" className="container py-10">
@@ -205,12 +212,17 @@ const Rooms = () => {
                             <DropdownMenuLabel>Sort Rooms</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="flex items-center gap-2 relative pl-6" onClick={() => handleSortByChange("none")}>None {sortBy === "none" && <span className="w-[7px] h-[7px] rounded-full bg-destructive absolute top-[50%] translate-y-[-50%] left-2" />}</DropdownMenuItem>
+                            <DropdownMenuItem className="flex items-center gap-2 relative pl-6" onClick={() => handleSortByChange("availability-high-to-low")}>Availability <span className="flex items-center text-primary/80 gap-1">(Highest <ArrowRight className="w-3 h-3" /> Lowest)</span> {sortBy === "availability-high-to-low" && <span className="w-[7px] h-[7px] rounded-full bg-destructive absolute top-[50%] translate-y-[-50%] left-2" />}</DropdownMenuItem>
+                            <DropdownMenuItem className="flex items-center gap-2 relative pl-6" onClick={() => handleSortByChange("availability-low-to-high")}>Availability <span className="flex items-center text-primary/80 gap-1">(Lowest <ArrowRight className="w-3 h-3" /> Highest)</span> {sortBy === "availability-low-to-high" && <span className="w-[7px] h-[7px] rounded-full bg-destructive absolute top-[50%] translate-y-[-50%] left-2" />}</DropdownMenuItem>
                             <DropdownMenuItem className="flex items-center gap-2 relative pl-6" onClick={() => handleSortByChange("capacity-high-to-low")}>Capacity <span className="flex items-center text-primary/80 gap-1">(Highest <ArrowRight className="w-3 h-3" /> Lowest)</span> {sortBy === "capacity-high-to-low" && <span className="w-[7px] h-[7px] rounded-full bg-destructive absolute top-[50%] translate-y-[-50%] left-2" />}</DropdownMenuItem>
                             <DropdownMenuItem className="flex items-center gap-2 relative pl-6" onClick={() => handleSortByChange("capacity-low-to-high")}>Capacity <span className="flex items-center text-primary/80 gap-1">(Lowest <ArrowRight className="w-3 h-3" /> Highest)</span> {sortBy === "capacity-low-to-high" && <span className="w-[7px] h-[7px] rounded-full bg-destructive absolute top-[50%] translate-y-[-50%] left-2" />}</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
                 </div>
             </div>
+
+
 
             <div className="flex flex-wrap gap-3 my-10">
                 {selectedTags?.map((tag, i) => (
@@ -220,6 +232,8 @@ const Rooms = () => {
                     </div>
                 ))}
             </div>
+
+            
 
             <div>
                 {loadingRooms
