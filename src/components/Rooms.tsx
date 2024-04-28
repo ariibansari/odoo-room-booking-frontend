@@ -150,7 +150,7 @@ const Rooms = () => {
 
     return (
         <section id="rooms" className="container py-10">
-            <div className="flex flex-wrap items-center gap-10">
+            <div className="flex flex-wrap items-center gap-5 lg:gap-10">
                 <div className="relative">
                     <Search className="absolute top-[50%] translate-y-[-45%] left-4 w-4" />
                     <Input placeholder="search rooms" className="pl-10 w-[40rem] max-w-full" value={searchText} onChange={handleSearchTextChange} />
